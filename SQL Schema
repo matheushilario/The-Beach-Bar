@@ -1,0 +1,51 @@
+# Regenerate SQL schema with proper date and datetime types
+
+corrected_sql_schema = """
+-- Table: menu_items
+CREATE TABLE menu_items (
+    item_name TEXT,
+    category TEXT,
+    price_aud REAL,
+    ingredient_cost_aud REAL,
+    prep_time_min INTEGER
+);
+
+-- Table: pos_orders
+CREATE TABLE pos_orders (
+    order_id INTEGER,
+    datetime DATETIME,
+    item TEXT,
+    category TEXT,
+    quantity INTEGER,
+    unit_price_aud REAL,
+    total_aud REAL,
+    table_no INTEGER,
+    server_name TEXT
+);
+
+-- Table: kitchen_roster
+CREATE TABLE kitchen_roster (
+    date DATE,
+    staff_name TEXT,
+    role TEXT,
+    shift_start DATETIME,
+    shift_end DATETIME,
+    hourly_rate_aud REAL
+);
+
+-- Table: foh_roster
+CREATE TABLE foh_roster (
+    date DATE,
+    staff_name TEXT,
+    role TEXT,
+    shift_start DATETIME,
+    shift_end DATETIME,
+    hourly_rate_aud REAL
+);
+"""
+
+corrected_schema_path = "/mnt/data/SQL_Schema_Corrected_Restaurant_KPI_Tracker.sql"
+with open(corrected_schema_path, "w") as file:
+    file.write(corrected_sql_schema)
+
+corrected_schema_path
