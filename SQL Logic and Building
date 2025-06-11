@@ -1,0 +1,226 @@
+ Step 1 – Understanding Time Blocks: From Raw Orders to Operational Shifts
+
+🎯 Business Context:
+In hospitality, not all hours are created equal.
+The Beach Bar & Grill runs across three key operational time blocks:
+
+Lunch (11 AM – 2 PM)
+Afternoon Snacks (3 PM – 5 PM)
+Dinner (5 PM – 8 PM)
+
+While management sees total daily revenue, they lack visibility into:
+
+When revenue peaks
+When profitability is highest
+When labor cost is worth the spend
+
+❓ Why This Matters
+Grouping transactions by shift is the first step in understanding:
+
+Which shifts actually drive profit
+Where overstaffing or promotions are needed
+How menu performance varies by time of day
+
+This logic helps turn transactional data into strategic insight.
+
+🧠 Analytical Thinking
+Rather than just showing a timeline of sales, we create shift-based segmentation, which will later allow us to:
+
+Calculate profit per shift
+Compare labor cost vs. revenue by time block
+Recommend staffing optimization
+
+🛠️ Technical Approach
+We added a new column, shift_type, to every order in the pos_orders table by extracting the hour of the transaction and mapping it to the appropriate operational block.
+
+✅ SQL Implementation (data.world – PrestoSQL engine)
+
+SELECT
+    orderid,
+    datetime,
+    item,
+    category,
+    quantity,
+    unit_price_aud,
+    total_aud,
+    table_no,
+    server_name,
+
+  CASE
+    WHEN hours(datetime) BETWEEN 11 AND 14 THEN 'Lunch'
+    WHEN hours(datetime) BETWEEN 15 AND 17 THEN 'Snack'
+    WHEN hours(datetime) BETWEEN 17 AND 20 THEN 'Dinner'
+    ELSE 'Other'
+  END AS shift_type
+
+FROM pos_orders;
+
+
+
+
+Step 2 – Calculating Gross Profit per Order: Revenue is Vanity, Profit is Reality
+
+
+🎯 Business Context:
+
+While revenue tells us what’s selling, it doesn't tell us what's actually profitable.
+Management may push burgers and cocktails because they sell well — but what if they carry high ingredient costs?
+
+To support smarter decisions on:
+
+Menu engineering
+Promotion strategies
+Operational focus
+
+…we need to calculate Gross Profit at the order level.
+
+❓ Why This Matters:
+
+By identifying the COGS (cost of goods sold) per order, we can compute:
+
+True profitability of each menu item
+Gross margin trends by shift
+Profit contributions by quantity and category
+
+This transforms POS data from sales records into profitability intelligence.
+
+🧠 Analytical Strategy:
+
+We’ll:
+
+Join pos_orders with menu_items using the item column
+
+Calculate:
+
+COGS = quantity × ingredient_cost_aud
+Gross Profit = total_aud – COGS
+
+🛠️ SQL Implementation (PrestoSQL for data.world)
+
+SELECT
+  po.orderid,
+  po.datetime,
+  po.item,
+  po.category AS item_category,
+  po.quantity,
+  po.unit_price_aud,
+  po.total_aud,
+  po.table_no,
+  po.server_name,
+
+  CASE
+    WHEN hours(po.datetime) BETWEEN 11 AND 14 THEN 'Lunch'
+    WHEN hours(po.datetime) BETWEEN 15 AND 17 THEN 'Snack'
+    WHEN hours(po.datetime) BETWEEN 17 AND 20 THEN 'Dinner'
+    ELSE 'Other'
+  END AS shift_type,
+
+  mi.ingredient_cost_aud,
+  (po.quantity * mi.ingredient_cost_aud) AS cogs_aud,
+  (po.total_aud - (po.quantity * mi.ingredient_cost_aud)) AS gross_profit_aud
+
+FROM pos_orders po
+JOIN menu_items mi
+  ON po.item = mi.item_name;
+
+
+
+📘 Step 3 – Profitability by Date + Shift: Building the KPI Backbone
+🎯 Business Context:
+Restaurant managers make critical decisions daily:
+
+“Do we need 3 chefs on Friday lunch?”
+
+“Is Sunday dinner worth the labor cost?”
+
+“Which shift deserves a promotion or happy hour?”
+
+But without seeing profitability per shift, these decisions are guesses.
+
+❓ Why This Matters:
+By grouping total revenue, total COGS, and gross profit by date and shift_type, we can:
+
+Identify underperforming time slots
+
+Support data-driven staff scheduling
+
+Target promos at high-margin time blocks
+
+This aggregated profitability view becomes the core of our Power BI dashboard.
+
+🧠 Analytical Strategy:
+We’ll group the previously joined pos_orders + menu_items data by:
+
+date
+
+shift_type
+
+And calculate:
+
+SUM(total_aud) = Revenue
+
+SUM(cogs_aud) = Ingredient cost
+
+SUM(gross_profit_aud) = Gross profit
+
+COUNT(DISTINCT orderid) = Order volume
+
+🛠️ SQL Implementation (data.world / PrestoSQL)
+
+WITH order_profits AS (
+  SELECT
+    CAST(po.datetime AS DATE) AS order_date,
+    CASE
+      WHEN hours(po.datetime) BETWEEN 11 AND 14 THEN 'Lunch'
+      WHEN hours(po.datetime) BETWEEN 15 AND 17 THEN 'Snack'
+      WHEN hours(po.datetime) BETWEEN 17 AND 20 THEN 'Dinner'
+      ELSE 'Other'
+    END AS shift_type,
+    po.orderid,
+    po.quantity,
+    po.total_aud,
+    (po.quantity * mi.ingredient_cost_aud) AS cogs_aud,
+    (po.total_aud - (po.quantity * mi.ingredient_cost_aud)) AS gross_profit_aud,
+    po.item
+  FROM pos_orders po
+  JOIN menu_items mi ON po.item = mi.item_name
+)
+
+SELECT
+  order_date,
+  shift_type,
+  COUNT(DISTINCT orderid) AS total_orders,
+  SUM(total_aud) AS total_revenue_aud,
+  SUM(cogs_aud) AS total_cogs_aud,
+  SUM(gross_profit_aud) AS total_gross_profit_aud
+FROM order_profits
+GROUP BY order_date, shift_type
+ORDER BY order_date, shift_type;
+
+✅ Output Example
+
+order_date	shift_type	total_orders	total_revenue_aud	total_cogs_aud	total_gross_profit_aud
+2024-06-04	Lunch	124	2,450.00	876.20	1,573.80
+2024-06-04	Dinner	215	4,320.00	1,547.50	2,772.50
+
+🔍 Future Insight Track: Most Profitable Items
+We’re already capturing:
+
+po.item
+
+gross_profit_aud
+
+So in Step 4, we’ll group by item to:
+
+Find top grossing items
+
+Spot low-margin bestsellers (good for removal or repricing)
+
+Enable menu engineering visuals (e.g., stars, dogs, puzzles, plowhorses)
+
+🔮 Where We're Going Next:
+Step 4: Item-level profitability analysis
+
+Step 5: Join with labor data to calculate Net Profit per shift
+
+Step 6: Power BI modeling and dashboard layout
